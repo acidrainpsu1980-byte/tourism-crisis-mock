@@ -592,7 +592,9 @@
     const badges = { command: sos.filter(x => x.status === 'received').length + tasks.filter(t => t.status === 'pending').length, alerts: alerts.filter(a => a.status === 'review').length, mytasks: S.role === 'volunteer' ? (await API.getTasks()).filter(t => t.status === 'offered' && t.assignments.some(a => a.status === 'offered' && a.volunteer_id === S.persona)).length : 0 };
     await drawShell(badges);
     const sc = SCREENS[S.screen];
-    const body = await RENDER[S.screen]();
+    let body;
+    try { body = await RENDER[S.screen](); }
+    catch (err) { console.error(err); body = `<section class="card"><div class="empty">${icon('alert', 28)}<p><b>แสดงหน้านี้ไม่ได้</b><br>ข้อมูลเดโมที่เก็บในเบราว์เซอร์นี้อาจมาจากเวอร์ชันเก่า กดรีเซ็ตเพื่อเริ่มใหม่</p><p style="margin-top:12px"><button class="btn" data-action="hard-reset">รีเซ็ตข้อมูลเดโม</button></p></div></section>`; }
     content.innerHTML = `<div class="page-head"><div><h1>${sc.name}</h1><p>${sc.sub}${techI(sc.fr)}</p></div></div>${body}`;
     attachCharts(); drawTour(); persist();
     document.documentElement.classList.toggle('show-tech', !!S.tech);
@@ -700,6 +702,7 @@
       case 'kpi-bump': { const v = await modal({ title: 'ออกเวอร์ชันสูตรใหม่', text: 'ค่าเก่ายังอ้างอิงเวอร์ชันเดิม ไม่ปนกัน', fields: [{ id: 'f', label: 'สูตรใหม่ (เว้นว่างเพื่อคงเดิม)', type: 'textarea' }], ok: 'ออกเวอร์ชัน' }); if (!v) return; return act(API.bumpKPIVersion(d.id, v.f, me), 'ออกเวอร์ชันใหม่แล้ว'); }
       case 'ag-status': return act(API.setAgencyStatus(d.id, d.status, me), 'อัปเดตสถานะการประสานแล้ว');
       case 'run-tests': toast('กำลังทดสอบ…'); S.tests = await API.runTests(); toast(`ผ่าน ${S.tests.pass}/${S.tests.total}`); return draw();
+      case 'hard-reset': await API.reset(); try { localStorage.removeItem('tci-ui-v3'); } catch (er) {} location.reload(); return;
       case 'reset': { const v = await modal({ title: 'รีเซ็ตเดโมทั้งหมด', text: 'ทุกอย่างที่กดไว้ในเบราว์เซอร์นี้จะกลับเป็นค่าเริ่มต้น', ok: 'รีเซ็ต', danger: true }); if (!v) return; await API.reset(); Object.assign(S, { task: null, sos: null, alert: null, cell: null, tracking: [], tests: null, access: null, sosKey: null }); toast('รีเซ็ตแล้ว'); return draw(); }
     }
     if (!S.rolePop && $('.pop')) draw();
@@ -707,6 +710,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#overlay').innerHTML && (S.rolePop || S.nav)) { S.rolePop = false; S.nav = false; draw(); } });
 
   /* ================================================================ INIT */
+  window.addEventListener('unhandledrejection', ev => { console.error(ev.reason); if (!content.innerHTML.trim()) content.innerHTML = `<section class="card"><div class="empty"><p><b>โหลดเดโมไม่สำเร็จ</b></p><p style="margin-top:12px"><button class="btn" data-action="hard-reset">รีเซ็ตข้อมูลเดโม</button></p></div></section>`; });
   (async () => {
     try { const th = localStorage.getItem('tci-theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) {}
     ST = await API.getStatic();

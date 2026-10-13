@@ -6,7 +6,7 @@
  * สถานะที่ผู้ใช้เปลี่ยนเก็บใน localStorage
  * ===================================================================== */
 window.API = (() => {
-  const KEY = 'tci-mock-db-v2';
+  const KEY = 'tci-mock-db-v2'; // ข้อมูลที่เก็บไว้จะถูกล้างเมื่อ SEED.meta.data_version เปลี่ยน
   const delay = (v) => new Promise(r => setTimeout(() => r(structuredClone(v)), 40));
   const NOW0 = new Date(SEED.meta.now).getTime();
   const RULE = SEED.meta.priority_rule_version;
@@ -17,14 +17,14 @@ window.API = (() => {
   if (db.agency_status) Object.entries(db.agency_status).forEach(([id, st]) => { const a = SEED.agencies.find(x => x.agency_id === id); if (a) a.coord_status = st; });
   function freshDB() {
     return structuredClone({
-      clock_start: Date.now(),
+      data_version: SEED.meta.data_version, clock_start: Date.now(),
       major_incidents: SEED.major_incidents, incidents: SEED.incidents, sos_requests: SEED.sos_requests, rescue_tasks: SEED.rescue_tasks,
       volunteers: SEED.volunteers, alerts: SEED.alerts, import_batches: SEED.import_batches, quality_issues: SEED.quality_issues,
       social_signals: SEED.social_signals, users: SEED.users, kpi_definitions: SEED.kpi_definitions, alert_rules: SEED.alert_rules,
       audit_log: SEED.audit_log, data_sources: SEED.data_sources, outbox: [], seq: { sos: 100, task: 100, asg: 100, alert: 10, batch: 10 },
     });
   }
-  function load() { try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch (e) {} return freshDB(); }
+  function load() { try { const s = localStorage.getItem(KEY); if (s) { const d = JSON.parse(s); if (d && d.data_version === SEED.meta.data_version) return d; } } catch (e) {} return freshDB(); }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} }
 
   /* ---- นาฬิกาจำลอง: เริ่ม 14:00 แล้วเดินตามเวลาจริง ---- */

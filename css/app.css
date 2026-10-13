@@ -325,6 +325,8 @@ tr.dim td { opacity: .55; }
   .kpi .k-val { font-size: 26px; }
   .incident-switch { order: 5; width: 100%; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
   .inc-btn { white-space: nowrap; }
+  .incident-switch { scrollbar-width: none; } .incident-switch::-webkit-scrollbar { display: none; }
+  .tour-body { padding: 12px; gap: 8px; } .tour-body h3 { font-size: 15.5px; } .tour-body p { font-size: 13px; }
   .topbar { padding: 10px 16px; gap: 10px; }
   .content { padding: 18px 16px 110px; }
   .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
