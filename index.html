@@ -2,30 +2,24 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tourism Crisis Intelligence · Phuket Sandbox (Mock)</title>
-<meta name="description" content="เว็บจำลองระบบอัจฉริยะเพื่อบริหารความเสี่ยงและตอบสนองภาวะวิกฤติการท่องเที่ยว จังหวัดภูเก็ต — ใช้ข้อมูลจำลองทั้งหมด">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tourism Crisis Intelligence</title>
+<meta name="description" content="เว็บจำลองระบบบริหารความเสี่ยงและตอบสนองภาวะวิกฤติการท่องเที่ยว จังหวัดภูเก็ต — ใช้ข้อมูลจำลองทั้งหมด">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand"><div class="brand-icon" aria-hidden="true">TCI</div>
-    <div><div class="name">Tourism Crisis Intelligence</div><div class="small">Tenant: <span id="tenant"></span> · <span id="snapshot"></span></div></div></div>
-  <div class="chrome">
-    <span class="demo-tag">ข้อมูลสาธิต · ไม่มีการส่งข้อมูลออกภายนอก</span>
-    <label>เหตุการณ์หลัก <select id="scenario" aria-label="เลือกเหตุการณ์หลัก"></select></label>
-    <label>บทบาท <select id="role" aria-label="เลือกบทบาทผู้ใช้"></select></label>
-    <label id="persona-wrap" hidden>ตัวตน <select id="persona" aria-label="เลือกตัวตนผู้ใช้"></select></label>
-    <button id="theme" class="btn secondary sm" type="button" aria-label="สลับธีมสว่าง/มืด">☀/☾</button>
+<div class="app">
+  <aside class="rail" id="rail" aria-label="เมนูหลัก"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="content" id="content" aria-live="polite"></main>
   </div>
-</header>
-<div class="shell">
-  <nav class="side" id="nav" aria-label="หน้าจอระบบ"></nav>
-  <main id="content" aria-live="polite"></main>
 </div>
-<div id="status" class="status-bar" role="status" aria-live="polite"></div>
+<div id="overlay"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="js/data/seed.js"></script>
 <script src="js/api.js"></script>
 <script src="js/charts.js"></script>
