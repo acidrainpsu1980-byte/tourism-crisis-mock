@@ -250,3 +250,5 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 960px) { .board { grid-template-columns: 1fr 1fr; } .progress { grid-template-columns: repeat(3, 1fr); } .matrix.cells { grid-template-columns: 100px repeat(4, minmax(0,1fr)); } .kv { grid-template-columns: 1fr; } }
 [hidden] { display: none !important; }
 @media (max-width: 960px) { .side-group { display: none; } }
+.agency-pill { cursor: pointer; border: 1px solid transparent; }
+.agency-pill:hover { border-color: var(--accent); }

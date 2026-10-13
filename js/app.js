@@ -16,17 +16,19 @@
     analytics: { code: 'FR05–06', name: 'Analytical Dashboard', sub: 'KPI เปรียบเทียบพื้นที่และเวลา Drill down และส่งออกรายงาน', group: 'วิเคราะห์' },
     risk:      { code: 'FR07', name: 'Tourism Risk Map', sub: 'ชั้นพื้นที่เสี่ยง คะแนน 0–100 ที่มา วิธีประเมิน เวอร์ชัน และความเชื่อมั่น', group: 'วิเคราะห์' },
     heatmap:   { code: 'FR15', name: 'Mobility Heatmap', sub: 'ช่วงเวลา ประเภทจำนวน แหล่งข้อมูล ความครอบคลุมและความเชื่อมั่น', group: 'วิเคราะห์' },
+    agencies:  { code: 'แผน 16/10', name: 'หน่วยงานภาคี (20 หน่วย)', sub: 'หน่วยงานหลัก 20 หน่วย + สนับสนุน 12 หน่วย ตามแผนนัดหมายประสานข้อมูลจังหวัดภูเก็ต · เชื่อมกับแหล่งข้อมูล ผู้ใช้ ภารกิจ และประกาศในระบบ', group: 'ข้อมูลและระบบ' },
     data:      { code: 'FR02–04', name: 'Data Management', sub: 'Source Batch Quality Metadata และประวัติการนำเข้า', group: 'ข้อมูลและระบบ' },
     admin:     { code: 'FR01', name: 'Administration', sub: 'ผู้ใช้ Role Area Scope KPI และกฎแจ้งเตือน', group: 'ข้อมูลและระบบ' },
     qa:        { code: '§12', name: 'ทดสอบ & QA', sub: 'ชุดทดสอบความถูกต้อง เกณฑ์ Load test และ SLO', group: 'ข้อมูลและระบบ' },
     audit:     { code: 'FR18', name: 'Audit Log', sub: 'ประวัติการกระทำ (append-only) ระบุผู้กระทำ รายการ และ request id', group: 'ข้อมูลและระบบ' },
   };
   const ROLE_USER = { commander: 'U01', dispatcher: 'U02', agency: 'U04', steward: 'U05', admin: 'U06' };
+  const AG_USERS = ['U04', 'U09', 'U10', 'U11', 'U12'];
 
-  const S = { screen: 'exec', scenario: 'flood', role: 'dispatcher', persona: 'V01', task: null, sos: null, alert: null, cell: null, riskArea: 'A1', filterArea: '', publicView: false, biTable: false, tracking: [], tests: null, accessResult: null };
+  const S = { agencyUser: 'U04', agencySel: 'AG01', agTier: 'core', agFunc: '', agRound: '', screen: 'exec', scenario: 'flood', role: 'dispatcher', persona: 'V01', task: null, sos: null, alert: null, cell: null, riskArea: 'A1', filterArea: '', publicView: false, biTable: false, tracking: [], tests: null, accessResult: null };
   try { Object.assign(S, JSON.parse(localStorage.getItem('tci-ui-v2') || '{}')); } catch (e) {}
-  { const q = new URLSearchParams(location.search); ['screen', 'scenario', 'role', 'persona'].forEach(k => { if (q.has(k)) S[k] = q.get(k); }); }
-  const persistUI = () => { try { localStorage.setItem('tci-ui-v2', JSON.stringify({ screen: S.screen, scenario: S.scenario, role: S.role, persona: S.persona, tracking: S.tracking })); } catch (e) {} };
+  { const q = new URLSearchParams(location.search); ['screen', 'scenario', 'role', 'persona', 'agencyUser'].forEach(k => { if (q.has(k)) S[k] = q.get(k); }); }
+  const persistUI = () => { try { localStorage.setItem('tci-ui-v2', JSON.stringify({ screen: S.screen, scenario: S.scenario, role: S.role, persona: S.persona, agencyUser: S.agencyUser, tracking: S.tracking })); } catch (e) {} };
 
   /* ---------- labels ---------- */
   const L = {
@@ -51,11 +53,14 @@
   const dateTH = iso => iso ? new Date(iso).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
   const areaName = id => (ST.areas.find(a => a.area_id === id) || {}).name || id || '—';
   const agencyName = id => (ST.agencies.find(a => a.agency_id === id) || {}).name || id || '—';
+  const agencyShort = id => { const a = ST.agencies.find(x => x.agency_id === id); return a ? `${a.no ? a.no + '. ' : ''}${a.short}` : (id || '—'); };
+  const agencyPill = (id, extra = '') => `<span class="list-pill agency-pill" data-agency="${id}" title="${esc(agencyName(id))}">${esc(agencyShort(id))}${extra}</span>`;
+  const COORD = { planned: ['วางแผนนัด', ''], invited: ['ส่งหนังสือเชิญ', 'info'], met: ['ประชุมแล้ว', 'warn'], sample: ['ได้ข้อมูลตัวอย่าง', 'serious'], agreement: ['ตกลงเชื่อมข้อมูล', 'good'] };
   const hazardName = c => (ST.hazard_types.find(h => h.hazard_code === c) || {}).name || c;
   const skillName = c => ST.skill_names[c] || c;
   const role = () => ST.roles.find(r => r.role_code === S.role);
   const can = p => role().can.includes(p);
-  const actor = () => S.role === 'volunteer' ? S.persona : S.role === 'tourist' ? 'นักท่องเที่ยว (บัญชี)' : ROLE_USER[S.role];
+  const actor = () => S.role === 'volunteer' ? S.persona : S.role === 'agency' ? S.agencyUser : S.role === 'tourist' ? 'นักท่องเที่ยว (บัญชี)' : ROLE_USER[S.role];
   const lockNote = p => can(p) ? '' : `<p class="role-note">บทบาท "${esc(role().name)}" ไม่มีสิทธิ์ดำเนินการนี้ (RBAC) · เปลี่ยนบทบาทที่มุมขวาบน</p>`;
   const scoreCls = s => s >= 70 ? 'hi' : s >= 40 ? 'mid' : 'lo';
   const scorePill = (p) => `<span class="score ${scoreCls(p.score)}" title="กฎ ${p.rule_version}">${p.score}</span>${p.hard_priority ? ' ' + tag('Hard Priority', 'crit') : ''}${p.override ? ' ' + tag('ปรับโดยเจ้าหน้าที่', 'warn') : ''}`;
@@ -98,6 +103,9 @@
         <div class="toolbar"><button class="btn" data-go="command">เปิด Command Center</button><button class="btn secondary" data-go="analytics">Analytical Dashboard</button><button class="btn secondary" data-go="risk">Risk Map</button></div>
         <p class="small" style="margin-top:8px">ขอบเขตอำนาจ: ระบบเสนอข้อมูลและติดตามงาน · การประกาศเตือนสาธารณะ การอพยพ และการสั่งกู้ภัยอยู่กับผู้มีอำนาจของหน่วยงาน</p></section>
     </div>
+    <section class="panel"><div class="row"><h3>หน่วยงานที่เกี่ยวข้องกับเหตุการณ์นี้</h3><button class="btn sm secondary" data-go="agencies">ทะเบียนหน่วยงานภาคี</button></div>
+      <dl class="kv"><dt>หน่วยงานหลัก (Lead)</dt><dd>${agencyPill(m.agencies.lead)}</dd><dt>หน่วยสนับสนุน</dt><dd>${m.agencies.support.map(id => agencyPill(id)).join('')}</dd><dt>หน่วยรับทราบ/ประกาศ</dt><dd>${m.agencies.inform.map(id => agencyPill(id)).join('')}</dd></dl>
+      <p class="small" style="margin-top:6px">อ้างอิงหน่วยงานตามแผนนัดหมายประสานข้อมูลจังหวัดภูเก็ต 16 ต.ค. 2569 · บทบาท Lead/Support เป็นข้อเสนอเพื่อยืนยันใน SOP ของจังหวัด</p></section>
     <div class="grid cols-2">
       <section class="panel"><div class="row"><h3>เหตุสะสมตามเวลา</h3><span class="small">เฉพาะเหตุที่ยืนยัน · ${esc(areaName(m.area_id))}</span></div>${barHtml}</section>
       <section class="panel"><h3>ความสดของแหล่งข้อมูลหลัก</h3>${table(['แหล่ง', 'รับล่าสุด', 'SLA', 'สถานะ'], srcs.filter(s => s.enabled).map(s => ({ cells: [esc(s.name), s.last_received_at ? `${hhmm(s.last_received_at)} <span class="small">(${s.age_min} นาที)</span>` : '—', s.refresh_seconds >= 86400 ? `${Math.round(s.refresh_seconds / 86400)} วัน` : `${Math.round(s.refresh_seconds / 60)} นาที`, s.stale ? tag('Stale', 'warn') : tag('ตรงเวลา', 'good')] })))}<p class="small" style="margin-top:6px">Snapshot KPI: ${dateTH(k.snapshot_at)} · เวอร์ชันสูตร: ${Object.entries(k.kpi_versions).slice(0, 4).map(([c, v]) => `${c} v${v}`).join(', ')} …</p></section>
@@ -176,7 +184,7 @@
       if (['draft', 'rejected'].includes(a.status)) actions.push(`<button class="btn" data-action="alert" data-op="submit" data-id="${a.alert_id}" ${can('draft_alert') ? '' : 'disabled'}>ส่งทบทวน</button>`);
       if (a.status === 'review') { actions.push(`<button class="btn" data-action="alert" data-op="approve" data-id="${a.alert_id}" ${can('approve_alert') ? '' : 'disabled'}>อนุมัติ (ผู้บัญชาการ)</button>`); actions.push(`<button class="btn danger" data-action="alert" data-op="reject" data-id="${a.alert_id}" ${can('approve_alert') ? '' : 'disabled'}>ส่งกลับแก้ไข</button>`); }
       if (a.status === 'approved') actions.push(`<button class="btn" data-action="alert" data-op="publish" data-id="${a.alert_id}" ${can('publish_alert') ? '' : 'disabled'}>เผยแพร่ (POST /v1/alerts/{id}/publish)</button>`);
-      if (a.status === 'published' && can('ack_alert')) actions.push(`<button class="btn secondary" data-action="ack" data-id="${a.alert_id}">ตอบรับประกาศในนามหน่วยงาน</button>`);
+      if (a.status === 'published' && can('ack_alert') && !(a.acks || []).some(k => k.actor === actor())) actions.push(`<button class="btn secondary" data-action="ack" data-id="${a.alert_id}">ตอบรับประกาศในนามหน่วยงาน</button>`);
     }
     return `${banner(m)}
     <div class="grid cols-2">
@@ -194,8 +202,9 @@
         <p class="small">ระดับ <span class="lvl" style="background:${lvlColor(a.level)}">${a.level}</span> · อ้างอิง ${a.incident_id} (${L.inc[m.status]}) · ช่องทาง ${a.channels.map(c => `<span class="list-pill">${esc(c)}</span>`).join('')}</p>
         ${langs.map(([l, n]) => { const tr = a.translations[l]; const ok = tr.message && tr.reviewed_by; return `<div class="quote"><div class="lang"><span>${n}${tr.title ? ' · ' + esc(tr.title) : ''}</span>${ok ? tag(`ตรวจแล้วโดย ${tr.reviewed_by}`, 'good') : (tr.message ? (can('draft_alert') || can('approve_alert') ? `<button class="btn sm secondary" data-action="review-tr" data-id="${a.alert_id}" data-lang="${l}">ยืนยันคำแปล ${l.toUpperCase()}</button>` : tag('รอตรวจ', 'warn')) : tag('ยังไม่มีข้อความ', 'crit'))}</div>${tr.message ? esc(tr.message) : (can('draft_alert') && !['published', 'approved'].includes(a.status) ? `<div class="form"><input id="tr-${l}-title" placeholder="หัวข้อ ${l.toUpperCase()}"><textarea id="tr-${l}-msg" rows="2" placeholder="ข้อความ ${l.toUpperCase()}"></textarea><button class="btn sm secondary" data-action="set-tr" data-id="${a.alert_id}" data-lang="${l}">บันทึก ${l.toUpperCase()}</button></div>` : '<span class="muted">—</span>')}</div>`; }).join('')}
         <div class="toolbar">${actions.join('')}${a.status === 'review' && can('approve_alert') ? `<input id="rej-note" placeholder="เหตุผลส่งกลับ (ถ้ามี)" style="flex:1;min-width:160px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)">` : ''}</div>
-        ${a.status === 'review' ? lockNote('approve_alert') : a.status === 'approved' ? lockNote('publish_alert') : lockNote('draft_alert')}
-        ${a.deliveries.length ? `<div class="rule"><span class="kicker">การส่งตามช่องทาง (notification_delivery)</span>${table(['ช่องทาง', '#ส่ง', '#ถึงผู้รับ', '#ตอบรับ', '#ล้มเหลว', '#ครั้งที่ส่ง'], a.deliveries.map(d => ({ cells: [esc(d.channel), d.sent, d.delivered, d.acknowledged, d.failed, d.attempt_count] })))}<p class="small">ส่งสำเร็จ (delivered) ≠ ผู้ใช้ตอบรับ (acknowledged) · ล้มเหลวจะ retry ตาม next_attempt_at${a.acks ? ` · หน่วยงานตอบรับ: ${a.acks.map(x => agencyName(x.agency_id)).join(', ')}` : ''}</p></div>` : ''}
+        ${a.status === 'review' ? lockNote('approve_alert') : a.status === 'approved' ? lockNote('publish_alert') : ['draft', 'rejected'].includes(a.status) ? lockNote('draft_alert') : ''}
+        <div class="rule"><span class="kicker">หน่วยงานผู้รับประกาศ (ต้องตอบรับ)</span><p>${(a.target_agencies || []).map(id => { const k = (a.acks || []).find(x => x.agency_id === id); return agencyPill(id, k ? ` ✓ ${hhmm(k.at)}` : a.status === 'published' ? ' · รอ' : ''); }).join('') || '—'}</p>${a.status === 'published' ? `<p class="small">ตอบรับแล้ว ${(a.acks || []).length}/${(a.target_agencies || []).length} หน่วยงาน · ส่งถึง ≠ ตอบรับ</p>` : ''}</div>
+        ${a.deliveries.length ? `<div class="rule"><span class="kicker">การส่งตามช่องทาง (notification_delivery)</span>${table(['ช่องทาง', '#ส่ง', '#ถึงผู้รับ', '#ตอบรับ', '#ล้มเหลว', '#ครั้งที่ส่ง'], a.deliveries.map(d => ({ cells: [esc(d.channel), d.sent, d.delivered, d.acknowledged, d.failed, d.attempt_count] })))}<p class="small">ส่งสำเร็จ (delivered) ≠ ผู้ใช้ตอบรับ (acknowledged) · ล้มเหลวจะ retry ตาม next_attempt_at</p></div>` : ''}
         ${a.status === 'published' ? '<div class="message">บันทึกการเผยแพร่ในเดโม · เขียน Outbox แล้ว · ไม่มีการส่งข้อความออกนอกหน้าจอ</div>' : ''}
         ${timeline(a.history)}
       </section>` : '<section class="panel"><p class="small">ยังไม่มีประกาศ</p></section>'}
@@ -212,7 +221,7 @@
     const now = new Date(await API.now());
     const nextStatus = { accepted: 'en_route', en_route: 'on_scene', on_scene: 'completed' };
     const need = (t) => `<p class="small">ต้องการ: ${t.required_skills.map(skillName).join(', ') || '—'} · พื้นที่ ${esc(areaName(t.area_id))} · SLA ${hhmm(t.due_at)} · หน่วยงาน ${esc(agencyName(t.assigned_agency_id))}</p>`;
-    return `<section class="panel"><div class="row"><h3>${esc(me.display_name)} · ${esc(agencyName(me.agency_id))}</h3>${tag(L.verif[me.verification_status], L.verifCls[me.verification_status])} ${tag(L.vol[me.availability], L.volCls[me.availability])}</div>
+    return `<section class="panel"><div class="row"><h3>${esc(me.display_name)} · ${agencyPill(me.agency_id)}</h3>${tag(L.verif[me.verification_status], L.verifCls[me.verification_status])} ${tag(L.vol[me.availability], L.volCls[me.availability])}</div>
       <p class="small">ทักษะ: ${me.skills.map(s => `<span class="list-pill" style="${s.valid ? '' : 'background:var(--crit-bg)'}">${esc(s.name)}${s.valid_until ? ` (ถึง ${s.valid_until}${s.valid ? '' : ' · หมดอายุ'})` : ''}</span>`).join('')} · งานที่กำลังทำ ${me.active_tasks}/${me.max_active_tasks} · ตำแหน่งล่าสุด ${hhmm(me.location_updated_at)}</p>
       <p class="small">เห็นเฉพาะภารกิจของตนและข้อมูลช่วยเหลือที่จำเป็น · ไม่เห็นข้อมูลติดต่อผู้ขอความช่วยเหลือจนกว่าจะตอบรับ</p></section>
     <div class="grid cols-2">
@@ -341,7 +350,7 @@
       ${metric('ปัญหาคุณภาพเปิดอยู่', open.length, `critical ${open.filter(q => q.severity === 'critical').length}`, open.some(q => q.severity === 'critical') ? 'crit' : open.length ? 'warn' : 'good', 'รายการ')}
     </div>
     <section class="panel"><div class="row"><h3>ทะเบียนแหล่งข้อมูลและข้อตกลง (FR02)</h3>${tag('อ้างอิงคำขอข้อมูล R01–R20', 'info')}</div>
-      ${table(['แหล่ง', 'ประเภท', 'ข้อมูล', 'เจ้าของ', 'ระดับชั้น', 'รอบอัปเดต', 'รับล่าสุด', 'สถานะ', 'ข้อตกลง'], srcs.map(s => ({ cells: [`<strong>${esc(s.name)}</strong><br><span class="small">${s.source_id} · ${esc(s.request)}</span>`, s.source_type, esc(s.dataset), esc(s.owner), tag(s.data_classification, L.srcCls[s.data_classification]), `${s.refresh_seconds >= 86400 ? Math.round(s.refresh_seconds / 86400) + ' วัน' : Math.round(s.refresh_seconds / 60) + ' นาที'}`, s.last_received_at ? `${dateTH(s.last_received_at)}` : '<span class="muted">ยังไม่ได้รับ</span>', !s.enabled ? tag('รอข้อตกลง', 'serious') : s.stale ? tag('Stale', 'warn') : tag('ตรงเวลา', 'good'), `<span class="small">${esc(s.agreement_reference)}</span>`] })))}
+      ${table(['แหล่ง', 'ประเภท', 'ข้อมูล', 'เจ้าของ', 'ระดับชั้น', 'รอบอัปเดต', 'รับล่าสุด', 'สถานะ', 'ข้อตกลง'], srcs.map(s => ({ cells: [`<strong>${esc(s.name)}</strong><br><span class="small">${s.source_id} · ${esc(s.request)}</span>`, s.source_type, esc(s.dataset), agencyPill(s.agency_id), tag(s.data_classification, L.srcCls[s.data_classification]), `${s.refresh_seconds >= 86400 ? Math.round(s.refresh_seconds / 86400) + ' วัน' : Math.round(s.refresh_seconds / 60) + ' นาที'}`, s.last_received_at ? `${dateTH(s.last_received_at)}` : '<span class="muted">ยังไม่ได้รับ</span>', !s.enabled ? tag('รอข้อตกลง', 'serious') : s.stale ? tag('Stale', 'warn') : tag('ตรงเวลา', 'good'), `<span class="small">${esc(s.agreement_reference)}</span>`] })))}
       <div class="toolbar"><select id="imp-src" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)">${srcs.filter(s => s.enabled).map(s => `<option value="${s.source_id}">${esc(s.name)}</option>`).join('')}</select><input id="imp-key" placeholder="external_batch_key เช่น smartcity-20261013-1400" style="flex:1;min-width:220px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)"><button class="btn sm" data-action="import" ${can('quality') || can('admin') ? '' : 'disabled'}>จำลองนำเข้า (POST /v1/imports)</button><button class="btn sm secondary" data-action="import-dup">ลองส่งชุดเดิมซ้ำ</button></div>
       <p class="small">ส่งชุดเดิมซ้ำต้องไม่เพิ่มข้อมูล (FR03) · Service identity + Schema version + Checksum · คืน HTTP 202 เมื่อเข้าคิวอย่างทนทาน</p></section>
     <div class="grid cols-2">
@@ -393,7 +402,55 @@
     <section class="panel"><h3>ops.outbox_event (รอ Worker เผยแพร่)</h3>${table(['เวลา', 'event_type', 'aggregate_id', 'payload', 'published'], outbox.map(o => ({ cells: [dateTH(o.created_at), `<span class="mono small">${o.event_type}</span>`, o.aggregate_id, `<span class="mono small">${esc(JSON.stringify(o.payload))}</span>`, o.published_at ? hhmm(o.published_at) : tag('รอส่ง', 'warn')] })), { empty: 'ยังไม่มีเหตุการณ์ใน Outbox (ส่ง SOS หรือเผยแพร่ประกาศเพื่อดู)' })}</section>`;
   }
 
-  const RENDER = { exec: screenExec, command: screenCommand, alerts: screenAlerts, mytasks: screenMyTasks, sos: screenSOS, analytics: screenAnalytics, risk: screenRisk, heatmap: screenHeatmap, data: screenData, admin: screenAdmin, qa: screenQA, audit: screenAudit };
+
+  async function screenAgencies() {
+    const { agencies, functions, rounds } = await API.getAgencies();
+    const core = agencies.filter(a => a.tier === 'core');
+    let list = agencies.filter(a => (S.agTier === 'all' ? true : a.tier === S.agTier) && (!S.agFunc || a.func === S.agFunc) && (!S.agRound || String(a.round) === S.agRound));
+    const sel = agencies.find(a => a.agency_id === S.agencySel) || core[0];
+    const cnt = st => core.filter(a => a.coord_status === st).length;
+    const order = ['planned', 'invited', 'met', 'sample', 'agreement'];
+    const srcLive = core.reduce((n, a) => n + a.sources.filter(x => x.enabled).length, 0), srcAll = core.reduce((n, a) => n + a.sources.length, 0);
+    const fn = Object.keys(functions).filter(k => agencies.some(a => a.func === k));
+    const funcCounts = fn.map(k => ({ k, n: core.filter(a => a.func === k).length })).filter(x => x.n);
+    const coordBar = order.map(st => `<div class="bar-row"><span>${tag(COORD[st][0], COORD[st][1])}</span><div class="track"><div class="fill" style="width:${cnt(st) / core.length * 100}%"></div></div><span class="num">${cnt(st)}</span></div>`).join('');
+    return `<div class="metrics">
+      ${metric('หน่วยงานหลัก', core.length, 'ตามข้อ 2 ของแผน · สนจ.ภูเก็ตเป็นหน่วยประสานหลัก', '', 'หน่วย')}
+      ${metric('หน่วยงานสนับสนุน', agencies.filter(a => a.tier === 'support').length, `+ เพิ่มตามความเสี่ยง ${agencies.filter(a => a.tier === 'conditional').length} กลุ่ม`, '', 'หน่วย')}
+      ${metric('ประชุมแล้วขึ้นไป', cnt('met') + cnt('sample') + cnt('agreement'), `ได้ข้อมูลตัวอย่าง ${cnt('sample')} · ตกลงเชื่อม ${cnt('agreement')} (ค่าจำลอง)`, '', 'หน่วย')}
+      ${metric('แหล่งข้อมูลเชื่อมแล้ว', `${srcLive} / ${srcAll}`, 'ของหน่วยงานหลัก · ที่เหลือรอนัดกลุ่ม', srcLive < srcAll ? 'warn' : 'good')}
+      ${metric('หน่วยงานรับภารกิจได้', agencies.filter(a => a.tasks_total || a.volunteers).length, 'มีภารกิจหรืออาสาสมัครสังกัดในระบบ', '', 'หน่วย')}
+    </div>
+    <div class="grid cols-2">
+      <section class="panel"><h3>สถานะการประสาน 20 หน่วยงานหลัก</h3>${coordBar}<p class="small" style="margin-top:6px">ลำดับ: วางแผนนัด → ส่งหนังสือเชิญ → ประชุมแล้ว → ได้ข้อมูลตัวอย่าง → ตกลงเชื่อมข้อมูล · สถานะเป็นค่าจำลองเพื่อสาธิต ไม่ใช่ผลนัดจริง</p></section>
+      <section class="panel"><h3>กำหนดการนัด 4 ช่วง (ข้อ 5)</h3>${rounds.map(r => `<div class="rule"><div class="row"><strong>ช่วง ${r.round} · ${esc(r.week)}</strong>${r.round === 4 ? tag('ทุกหน่วย + เพิ่มตามความเสี่ยง', 'info') : `<button class="btn sm secondary" data-ag-round="${r.round}">${agencies.filter(a => ['core', 'support'].includes(a.tier) && a.round === r.round).length} หน่วย</button>`}</div><p class="small">${esc(r.title)}<br>ผลที่ต้องได้: ${esc(r.output)}</p></div>`).join('')}</section>
+    </div>
+    <section class="panel"><div class="row"><h3>ทะเบียนหน่วยงาน</h3><span class="small">คลิกแถวเพื่อดูรายละเอียด</span></div>
+      <div class="filters">
+        <label class="small">กลุ่ม <select id="ag-tier"><option value="core" ${S.agTier === 'core' ? 'selected' : ''}>หน่วยงานหลัก (1–20)</option><option value="support" ${S.agTier === 'support' ? 'selected' : ''}>หน่วยงานสนับสนุน (21–32)</option><option value="conditional" ${S.agTier === 'conditional' ? 'selected' : ''}>เพิ่มตามความเสี่ยง</option><option value="all" ${S.agTier === 'all' ? 'selected' : ''}>ทั้งหมด</option></select></label>
+        <label class="small">ด้าน <select id="ag-func"><option value="">ทุกด้าน</option>${fn.map(k => `<option value="${k}" ${S.agFunc === k ? 'selected' : ''}>${esc(functions[k])}</option>`).join('')}</select></label>
+        <label class="small">ช่วงนัด <select id="ag-round"><option value="">ทุกช่วง</option>${rounds.map(r => `<option value="${r.round}" ${S.agRound === String(r.round) ? 'selected' : ''}>ช่วง ${r.round}</option>`).join('')}</select></label>
+        <span class="small">แสดง ${list.length} หน่วย · ด้าน: ${funcCounts.map(x => `${esc(functions[x.k])} ${x.n}`).join(' · ')}</span>
+      </div>
+      ${table(['#ที่', 'หน่วยงาน', 'ตำแหน่งที่เชิญ', 'ด้าน', 'ช่วงนัด', 'แหล่งข้อมูลในระบบ', 'บทบาทในเหตุการณ์', 'ภารกิจ/อาสา', 'สถานะประสาน'], list.map(a => ({ attrs: ` class="clickable ${a.agency_id === sel.agency_id ? 'selected' : ''}" data-agency-row="${a.agency_id}"`, cells: [a.no ?? '—', `<strong>${esc(a.name)}</strong><br><span class="small">${esc(a.short)} · ${a.agency_id}</span>${a.note ? `<br><span class="small" style="color:var(--crit)">⚠ ${esc(a.note)}</span>` : ''}`, `<span class="small">${esc(a.invited || '—')}</span>`, esc(functions[a.func] || a.func), a.round ? `ช่วง ${a.round}` : '—', a.sources.length ? a.sources.map(x => `<span class="list-pill" style="${x.enabled ? (x.stale ? 'background:var(--warn-bg)' : 'background:var(--good-bg)') : ''}" title="${esc(x.name)}">${x.source_id}${x.enabled ? '' : ' ·รอ'}</span>`).join('') : '<span class="muted">—</span>', a.incident_roles.map(r => `<span class="list-pill">${r.code.split('-')[1]} ${r.role === 'lead' ? 'Lead' : r.role === 'support' ? 'สนับสนุน' : 'รับทราบ'}</span>`).join('') || '<span class="muted">—</span>', `${a.tasks_open}/${a.tasks_total} · ${a.volunteers} คน`, tag(COORD[a.coord_status][0], COORD[a.coord_status][1])] })))}
+    </section>
+    ${sel ? `<div class="grid cols-2">
+      <section class="panel"><div class="row"><h3>${sel.no ? sel.no + '. ' : ''}${esc(sel.name)}</h3>${tag(COORD[sel.coord_status][0], COORD[sel.coord_status][1])}</div>
+        <dl class="kv"><dt>ตำแหน่งที่เชิญ</dt><dd>${esc(sel.invited || '—')}</dd><dt>ข้อมูลและประเด็นหารือ</dt><dd>${esc(sel.topics)}</dd><dt>ลิงก์/รูปแบบเชื่อมโยง</dt><dd>${esc(sel.link)}<br><span class="small">${esc(sel.link_mode)}</span>${sel.urls.length ? '<br>' + sel.urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener" class="small">${esc(u)}</a>`).join('<br>') : ''}</dd><dt>ข้อมูลที่ขอ</dt><dd>${esc(sel.requested || '—')}</dd><dt>บทบาทในระบบ</dt><dd>${sel.system_roles.map(r => `<span class="list-pill">${esc(r)}</span>`).join('') || '—'}</dd><dt>ช่วงนัด</dt><dd>${sel.round ? `ช่วง ${sel.round} · ${esc(rounds.find(r => r.round === sel.round).title)}` : '—'}</dd></dl>
+        ${can('admin') || can('kpi') || S.role === 'commander' ? `<div class="toolbar"><span class="small">อัปเดตสถานะประสาน:</span>${order.map(st => `<button class="btn sm ${st === sel.coord_status ? '' : 'secondary'}" data-action="ag-status" data-id="${sel.agency_id}" data-status="${st}">${COORD[st][0]}</button>`).join('')}</div>` : ''}
+        ${sel.note ? `<div class="alert">${esc(sel.note)}</div>` : ''}</section>
+      <section class="panel"><h3>ความเชื่อมโยงในระบบ</h3>
+        <div class="rule"><span class="kicker">แหล่งข้อมูล (ingest.data_source)</span>${sel.sources.length ? table(['แหล่ง', 'สถานะ', 'รับล่าสุด'], sel.sources.map(x => ({ cells: [`${x.source_id} · ${esc(x.name)}`, !x.enabled ? tag('รอข้อตกลง', 'serious') : x.stale ? tag('Stale', 'warn') : tag('เชื่อมแล้ว', 'good'), x.last_received_at ? dateTH(x.last_received_at) : '—'] }))) : '<p class="small">ยังไม่มีแหล่งข้อมูลที่ลงทะเบียน</p>'}</div>
+        <div class="rule"><span class="kicker">ผู้ใช้ในระบบ (core.user_agency)</span><p>${sel.users.map(u => `<span class="list-pill">${u.user_id} · ${esc(u.display_name)}${u.active ? '' : ' (ปิด)'}</span>`).join('') || '<span class="small">ยังไม่มีบัญชี</span>'}</p></div>
+        <div class="rule"><span class="kicker">บทบาทในเหตุการณ์จำลอง</span><p>${sel.incident_roles.map(r => `<span class="list-pill">${r.code} · ${r.role === 'lead' ? 'หน่วยหลัก' : r.role === 'support' ? 'สนับสนุน' : 'รับทราบ'}</span>`).join('') || '<span class="small">ไม่มี</span>'}</p></div>
+        <div class="rule"><span class="kicker">ประกาศที่ต้องตอบรับ</span><p>${sel.alerts.map(x => `<span class="list-pill">${x.alert_id} · ${L.alert[x.status]}${x.acked ? ' ✓' : ''}</span>`).join('') || '<span class="small">ไม่มี</span>'}</p></div>
+        <div class="rule"><span class="kicker">ภารกิจและอาสาสมัคร</span><p class="small">ภารกิจที่รับผิดชอบ ${sel.tasks_open} เปิดอยู่ จาก ${sel.tasks_total} · อาสาสมัครสังกัด ${sel.volunteers} คน</p></div>
+      </section></div>` : ''}
+    <section class="panel"><h3>หน่วยงานที่เพิ่มตามความเสี่ยง (ข้อ 4)</h3>${table(['กลุ่ม', 'เงื่อนไขและข้อมูลที่ต้องหารือ', 'ลิงก์'], agencies.filter(a => a.tier === 'conditional').map(a => ({ cells: [esc(a.name), `<span class="small">${esc(a.topics)}</span>`, a.urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener" class="small">${esc(u)}</a>`).join('') || '<span class="small">ประสานผ่านสำนักงานจังหวัด</span>'] })))}
+      <p class="small" style="margin-top:6px">ข้อควรระวังจากแผน: ไม่ดึงข้อมูลจากระบบภายในหรือ CCTV โดยไม่มีสิทธิ์ · ขอข้อมูลรวมไม่ระบุตัวบุคคลพร้อม data dictionary · ไม่บันทึก token ในเอกสารหรือ source code · ตรวจชื่อหน่วยงานและผู้ประสานก่อนออกหนังสือนัด</p></section>`;
+  }
+
+  const RENDER = { agencies: screenAgencies, exec: screenExec, command: screenCommand, alerts: screenAlerts, mytasks: screenMyTasks, sos: screenSOS, analytics: screenAnalytics, risk: screenRisk, heatmap: screenHeatmap, data: screenData, admin: screenAdmin, qa: screenQA, audit: screenAudit };
 
   /* ================================================================ DRAW */
   async function draw() {
@@ -407,7 +464,9 @@
     content.innerHTML = `<div class="heading"><div><div class="kicker">${s.code} · ${s.group}</div><h2>${esc(s.name)}</h2><p class="small">${esc(s.sub)}</p></div><div class="small">ผู้ใช้: <strong>${esc(actor())}</strong> · ${esc(r.name)}</div></div>`;
     content.innerHTML += await RENDER[S.screen]();
     attachChartTooltips();
-    $('#persona-wrap').hidden = S.role !== 'volunteer';
+    $('#persona-wrap').hidden = !['volunteer', 'agency'].includes(S.role);
+    if (S.role === 'agency') { const us = (await API.getUsers()).filter(u => AG_USERS.includes(u.user_id)); $('#persona').innerHTML = us.map(u => `<option value="${u.user_id}" ${u.user_id === S.agencyUser ? 'selected' : ''}>${esc(u.display_name)} · ${esc(agencyShort(u.agency_id))}</option>`).join(''); }
+    else if (S.role === 'volunteer') { const vs = await API.getVolunteers(); $('#persona').innerHTML = vs.map(v => `<option value="${v.volunteer_id}" ${v.volunteer_id === S.persona ? 'selected' : ''}>${esc(v.display_name)} · ${esc(agencyShort(v.agency_id))}</option>`).join(''); }
     persistUI(); window.scrollTo({ top: 0 });
   }
 
@@ -427,13 +486,19 @@
   const checked = cls => [...content.querySelectorAll('.' + cls + ':checked')].map(x => x.value);
   document.addEventListener('change', e => {
     if (e.target.id === 'f-area') { S.filterArea = e.target.value; draw(); }
+    if (e.target.id === 'ag-tier') { S.agTier = e.target.value; draw(); }
+    if (e.target.id === 'ag-func') { S.agFunc = e.target.value; draw(); }
+    if (e.target.id === 'ag-round') { S.agRound = e.target.value; draw(); }
     if (e.target.id === 'pub-view') { S.publicView = e.target.checked; draw(); }
     if (e.target.id === 'sos-area') { S.sosArea = e.target.value; draw(); }
   });
   document.addEventListener('click', async e => {
-    const b = e.target.closest('button, tr[data-sos], tr[data-alert], tr[data-risk], tr[data-filter-area], tr[data-go], .card[data-task], g.marker');
+    const b = e.target.closest('button, .agency-pill, tr[data-agency-row], tr[data-sos], tr[data-alert], tr[data-risk], tr[data-filter-area], tr[data-go], .card[data-task], g.marker');
     if (!b) return;
     const me = actor();
+    if (b.dataset.agencyRow) { S.agencySel = b.dataset.agencyRow; return draw(); }
+    if (b.dataset.agency && b.classList.contains('agency-pill')) { S.agencySel = b.dataset.agency; const ag = ST.agencies.find(x => x.agency_id === b.dataset.agency); if (ag) S.agTier = ag.tier; S.agFunc = ''; S.agRound = ''; if (role().screens.includes('agencies')) { S.screen = 'agencies'; return draw(); } return; }
+    if (b.dataset.agRound) { S.agRound = b.dataset.agRound; S.agTier = 'all'; return draw(); }
     if (b.dataset.screen) { S.screen = b.dataset.screen; return draw(); }
     if (b.dataset.go) { S.screen = b.dataset.go; if (b.dataset.alert) S.alert = b.dataset.alert; return draw(); }
     if (b.dataset.task) { S.task = b.dataset.task; return draw(); }
@@ -445,6 +510,7 @@
     if (b.dataset.cell) { const [c, h] = b.dataset.cell.split(':'); S.cell = [c, Number(h)]; return draw(); }
     const a = b.dataset.action; if (!a) return;
     switch (a) {
+      case 'ag-status': return act(API.setAgencyStatus(b.dataset.id, b.dataset.status, me), 'อัปเดตสถานะการประสานแล้ว');
       case 'stage': return act(API.advanceProtocol(S.scenario, me), 'เลื่อนขั้นตอน Protocol แล้ว');
       case 'verify-inc': return act(API.verifyIncident(b.dataset.id, me), 'ตรวจสอบเหตุแล้ว');
       case 'screen': { const skills = [...($('#sc-skills').selectedOptions || [])].map(o => o.value); return act(API.screenSOS(b.dataset.id, { urgency: val('sc-urg'), incident_id: val('sc-inc'), agency_id: val('sc-ag'), title: val('sc-title'), required_skills: skills, vulnerability_flags: checked('sc-vuln'), hard_priority: $('#sc-hard').checked, task_type: 'other' }, me).then(r => { if (r.ok) { S.task = r.task.task_id; S.sos = null; } return r; }), 'คัดกรองแล้ว สร้างภารกิจและคำนวณคะแนนลำดับ'); }
@@ -460,7 +526,7 @@
       case 'set-tr': return act(API.setTranslation(b.dataset.id, b.dataset.lang, val(`tr-${b.dataset.lang}-title`), val(`tr-${b.dataset.lang}-msg`), me), 'บันทึกข้อความแล้ว');
       case 'review-tr': return act(API.reviewTranslation(b.dataset.id, b.dataset.lang, me), `บันทึกผู้ตรวจภาษา ${b.dataset.lang.toUpperCase()} แล้ว`);
       case 'alert': return act(API.alertAction(b.dataset.id, b.dataset.op, me, val('rej-note')), { submit: 'ส่งทบทวนแล้ว', approve: 'อนุมัติแล้ว · พร้อมเผยแพร่', reject: 'ส่งกลับแก้ไขแล้ว', publish: 'เผยแพร่แล้ว · สร้าง delivery และ Outbox' }[b.dataset.op]);
-      case 'ack': { const u = (await API.getUsers()).find(x => x.user_id === me); return act(API.acknowledgeAlert(b.dataset.id, me, u ? u.agency_id : 'AG-MARINE'), 'ตอบรับประกาศในนามหน่วยงานแล้ว'); }
+      case 'ack': { const u = (await API.getUsers()).find(x => x.user_id === me); return act(API.acknowledgeAlert(b.dataset.id, me, u ? u.agency_id : 'AG09'), `ตอบรับประกาศในนาม ${u ? agencyShort(u.agency_id) : ''} แล้ว`); }
       case 'sig': return act(API.verifySignal(b.dataset.id, b.dataset.status, me), 'บันทึกผลตรวจสอบสัญญาณแล้ว');
       case 'sos-submit': case 'sos-resend': {
         if (a === 'sos-submit' || !S.sosKey) S.sosKey = 'idem-' + Math.random().toString(36).slice(2, 10);
@@ -485,7 +551,7 @@
   });
   $('#scenario').addEventListener('change', e => { S.scenario = e.target.value; Object.assign(S, { task: null, sos: null, alert: null, cell: null }); toast('เปลี่ยนเหตุการณ์หลักเป็น ' + e.target.selectedOptions[0].textContent); draw(); });
   $('#role').addEventListener('change', e => { S.role = e.target.value; S.screen = role().screens[0]; toast('เปลี่ยนบทบาทเป็น ' + role().name); draw(); });
-  $('#persona').addEventListener('change', e => { S.persona = e.target.value; draw(); });
+  $('#persona').addEventListener('change', e => { if (S.role === 'agency') S.agencyUser = e.target.value; else S.persona = e.target.value; draw(); });
   $('#theme').addEventListener('click', () => { const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); document.documentElement.dataset.theme = cur === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('tci-theme', document.documentElement.dataset.theme); } catch (e) {} });
 
   /* ================================================================ INIT */

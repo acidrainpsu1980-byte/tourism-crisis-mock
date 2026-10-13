@@ -10,9 +10,11 @@ window.API = (() => {
   const delay = (v) => new Promise(r => setTimeout(() => r(structuredClone(v)), 40));
   const NOW0 = new Date(SEED.meta.now).getTime();
   const RULE = SEED.meta.priority_rule_version;
+  const AG0 = Object.fromEntries(SEED.agencies.map(a => [a.agency_id, a.coord_status]));
   const uid = (p) => `${p}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 
   let db = load();
+  if (db.agency_status) Object.entries(db.agency_status).forEach(([id, st]) => { const a = SEED.agencies.find(x => x.agency_id === id); if (a) a.coord_status = st; });
   function freshDB() {
     return structuredClone({
       clock_start: Date.now(),
@@ -75,7 +77,7 @@ window.API = (() => {
   }
 
   const api = {
-    reset() { db = freshDB(); save(); return delay({ ok: true }); },
+    reset() { db = freshDB(); save(); SEED.agencies.forEach(a => { a.coord_status = AG0[a.agency_id]; }); return delay({ ok: true }); },
     now: () => iso(),
 
     /* ======== READ ======== */
@@ -97,6 +99,29 @@ window.API = (() => {
     getKPIDefs: () => delay(db.kpi_definitions),
     getAlertRules: () => delay(db.alert_rules),
     getUsers: () => delay(db.users),
+    /* ---- ทะเบียนหน่วยงานภาคี (แผนประสาน 16 ต.ค. 69) + ความเชื่อมโยงในระบบ ---- */
+    getAgencies() {
+      sweepExpired();
+      const rows = SEED.agencies.map(a => {
+        const sources = db.data_sources.filter(s => s.agency_id === a.agency_id);
+        const roleIn = db.major_incidents.map(m => ({ scenario: m.scenario, code: m.code, role: m.agencies.lead === a.agency_id ? 'lead' : m.agencies.support.includes(a.agency_id) ? 'support' : m.agencies.inform.includes(a.agency_id) ? 'inform' : null })).filter(x => x.role);
+        const alerts = db.alerts.filter(x => (x.target_agencies || []).includes(a.agency_id)).map(x => ({ alert_id: x.alert_id, status: x.status, acked: !!(x.acks || []).find(k => k.agency_id === a.agency_id) }));
+        return { ...a, sources: sources.map(x => ({ source_id: x.source_id, name: x.name, enabled: x.enabled, stale: sourceStale(x), last_received_at: x.last_received_at })),
+          users: db.users.filter(u => u.agency_id === a.agency_id).map(u => ({ user_id: u.user_id, display_name: u.display_name, role_code: u.role_code, active: u.active })),
+          volunteers: db.volunteers.filter(v => v.agency_id === a.agency_id).length,
+          tasks_open: db.rescue_tasks.filter(t => t.assigned_agency_id === a.agency_id && !['completed', 'cancelled'].includes(t.status)).length,
+          tasks_total: db.rescue_tasks.filter(t => t.assigned_agency_id === a.agency_id).length,
+          incident_roles: roleIn, alerts };
+      });
+      return delay({ agencies: rows, functions: SEED.agency_functions, rounds: SEED.meeting_rounds });
+    },
+    setAgencyStatus(agency_id, status, actor) {
+      const order = ['planned', 'invited', 'met', 'sample', 'agreement'];
+      if (!order.includes(status)) return fail('สถานะไม่ถูกต้อง');
+      db.agency_status = db.agency_status || {}; db.agency_status[agency_id] = status;
+      const a = SEED.agencies.find(x => x.agency_id === agency_id); if (a) a.coord_status = status;
+      audit(actor, 'agency.coord_status', 'agency', agency_id, { status }); save(); return delay({ ok: true });
+    },
     getAudit: () => delay(db.audit_log),
     getOutbox: () => delay(db.outbox),
 
@@ -274,7 +299,7 @@ window.API = (() => {
     /* ======== ประกาศ (FR08/FR09, POST /v1/alerts/{id}/publish) ======== */
     createAlert(scenario, form, actor) {
       const m = find(db.major_incidents, 'scenario', scenario);
-      const a = { alert_id: `ALT-NEW-${++db.seq.alert}`, scenario, incident_id: m.incident_id, area_id: m.area_id, level: Number(form.level || 3), status: 'draft', audience: form.audience || 'ประชาชนทั่วไป', channels: form.channels || ['LINE OA'],
+      const a = { alert_id: `ALT-NEW-${++db.seq.alert}`, scenario, incident_id: m.incident_id, area_id: m.area_id, level: Number(form.level || 3), status: 'draft', audience: form.audience || 'ประชาชนทั่วไป', channels: form.channels || ['LINE OA'], target_agencies: [m.agencies.lead, ...m.agencies.support.slice(0, 3), 'SP30'],
         translations: { th: { title: form.title, message: form.message, reviewed_by: null }, en: { title: '', message: '', reviewed_by: null }, zh: { title: '', message: '', reviewed_by: null } }, history: [{ ts: iso(), actor, action: 'สร้างร่าง' }], deliveries: [] };
       db.alerts.unshift(a); audit(actor, 'alert.created', 'alert', a.alert_id, { level: a.level }); save(); return delay({ ok: true, alert: a });
     },
@@ -301,7 +326,7 @@ window.API = (() => {
       a.status = flow.to; a.history.push({ ts: iso(), actor, action: flow.label + (note ? ` · ${note}` : '') });
       audit(actor, `alert.${action}`, 'alert', alert_id, { status: a.status, note }); save(); return delay({ ok: true, alert: a });
     },
-    acknowledgeAlert(alert_id, actor, agency_id) { const a = find(db.alerts, 'alert_id', alert_id); if (a.status !== 'published') return fail('ประกาศยังไม่เผยแพร่'); a.acks = a.acks || []; if (a.acks.find(x => x.agency_id === agency_id)) return fail('หน่วยงานนี้ตอบรับแล้ว'); a.acks.push({ agency_id, actor, at: iso() }); const d = a.deliveries[0]; if (d) d.acknowledged++; audit(actor, 'alert.acknowledged', 'alert', alert_id, { agency_id }); save(); return delay({ ok: true }); },
+    acknowledgeAlert(alert_id, actor, agency_id) { const a = find(db.alerts, 'alert_id', alert_id); if (a.status !== 'published') return fail('ประกาศยังไม่เผยแพร่'); a.acks = a.acks || []; if ((a.target_agencies || []).length && !a.target_agencies.includes(agency_id)) return fail('หน่วยงานของคุณไม่อยู่ในรายชื่อผู้รับประกาศนี้'); if (a.acks.find(x => x.agency_id === agency_id)) return fail('หน่วยงานนี้ตอบรับแล้ว'); a.acks.push({ agency_id, actor, at: iso() }); const d = a.deliveries[0]; if (d) d.acknowledged++; audit(actor, 'alert.acknowledged', 'alert', alert_id, { agency_id }); save(); return delay({ ok: true }); },
 
     /* ======== ข้อมูล (POST /v1/imports — กันชุดซ้ำ, Quality) ======== */
     importBatch(source_id, external_batch_key, actor) {

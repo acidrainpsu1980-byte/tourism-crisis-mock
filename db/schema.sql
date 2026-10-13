@@ -28,7 +28,12 @@ CREATE TABLE core.agency (
   name                text NOT NULL,
   agency_type         text NOT NULL,
   contact_ciphertext  bytea,                       -- เข้ารหัสระดับแอป (Envelope Encryption)
-  PRIMARY KEY (tenant_id, agency_id)
+  -- คอลัมน์เพิ่มจากแผนประสานข้อมูลจังหวัดภูเก็ต 16 ต.ค. 2569 (ไม่อยู่ในพจนานุกรมเดิม)
+  code                text,                        -- AG01–AG20 หลัก · SP21–SP32 สนับสนุน · CD-* ตามความเสี่ยง
+  tier                text CHECK (tier IN ('core','support','conditional','project')),
+  coord_status        text CHECK (coord_status IN ('planned','invited','met','sample','agreement')),
+  PRIMARY KEY (tenant_id, agency_id),
+  UNIQUE (tenant_id, code)
 );
 CREATE TABLE core.app_user (
   tenant_id           uuid NOT NULL REFERENCES core.tenant(tenant_id),
