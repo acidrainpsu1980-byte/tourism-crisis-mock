@@ -21,7 +21,22 @@ window.API = (() => {
       major_incidents: SEED.major_incidents, incidents: SEED.incidents, sos_requests: SEED.sos_requests, rescue_tasks: SEED.rescue_tasks,
       volunteers: SEED.volunteers, alerts: SEED.alerts, import_batches: SEED.import_batches, quality_issues: SEED.quality_issues,
       social_signals: SEED.social_signals, users: SEED.users, kpi_definitions: SEED.kpi_definitions, alert_rules: SEED.alert_rules,
-      audit_log: SEED.audit_log, data_sources: SEED.data_sources, outbox: [], seq: { sos: 100, task: 100, asg: 100, alert: 10, batch: 10 },
+      audit_log: SEED.audit_log, data_sources: SEED.data_sources, outbox: [],
+      commands: [
+        { cmd_id: 'CMD-001', scenario: 'flood', agency_id: 'AG02', text: 'เปิดศูนย์ประสานงานป่าตอง และส่งทีมกู้ภัยทางน้ำ 2 ชุด', by: 'U01', sent_at: '2026-10-13T10:35:00+07:00', ack_at: '2026-10-13T10:39:00+07:00', done_at: null, status: 'ack' },
+        { cmd_id: 'CMD-002', scenario: 'flood', agency_id: 'AG15', text: 'ปิดถนนราษฎร์อุทิศ 200 ปี ช่วงน้ำท่วม และจัดทางเลี่ยง', by: 'U02', sent_at: '2026-10-13T11:05:00+07:00', ack_at: '2026-10-13T11:12:00+07:00', done_at: '2026-10-13T11:40:00+07:00', status: 'done' },
+        { cmd_id: 'CMD-003', scenario: 'boat', agency_id: 'AG12', text: 'ส่งเรือกู้ภัยไปยังเรือสปีดโบ๊ตเครื่องดับ ห่างฝั่งอ่าวฉลอง 2 กม.', by: 'U03', sent_at: '2026-10-13T13:57:00+07:00', ack_at: null, done_at: null, status: 'sent' },
+        { cmd_id: 'CMD-004', scenario: 'crowd', agency_id: 'AG13', text: 'จัดเจ้าหน้าที่ล่ามภาษาจีนช่วยตามหาผู้ปกครองเด็กพลัดหลง', by: 'U03', sent_at: '2026-10-13T13:48:00+07:00', ack_at: '2026-10-13T13:50:00+07:00', done_at: null, status: 'ack' },
+      ],
+      field_reports: [
+        { rep_id: 'FR-001', scenario: 'flood', by: 'V07', area_id: 'A1', kind: 'photo', text: 'น้ำสูง 50 ซม. หน้าโรงแรมซอยบางลา รถเล็กผ่านไม่ได้', injured: 0, missing: 0, at: '2026-10-13T13:20:00+07:00' },
+        { rep_id: 'FR-002', scenario: 'crowd', by: 'V05', area_id: 'A3', kind: 'text', text: 'ทางออกซอยรมณีย์แน่น ต้องการแผงกั้นเพิ่ม 10 ชุด', injured: 0, missing: 1, at: '2026-10-13T13:52:00+07:00' },
+      ],
+      reports: [
+        { rep_id: 'RPT-001', type: 'daily', name: 'รายงานสถานการณ์ประจำวัน 12 ต.ค. 2569', by: 'U05', at: '2026-10-12T18:00:00+07:00', scenario: null },
+        { rep_id: 'RPT-002', type: 'social', name: 'รายงาน Social Listening สัปดาห์ที่ 41', by: 'U05', at: '2026-10-12T09:00:00+07:00', scenario: null },
+      ],
+      settings: { email: true, sms: true, line: true, push: true, sound: false, twofa: true, strongpw: true, pwexpire: '90 วัน', autologout: false, maxdev: '5 อุปกรณ์', lang: 'ไทย', tz: '(GMT+07:00) Bangkok', refresh: '5 นาที', density: 'ปานกลาง', backup: 'รายวัน', keep: '30 วัน', minlevel: 'สูง' }, seq: { sos: 100, task: 100, asg: 100, alert: 10, batch: 10 },
     });
   }
   function load() { try { const s = localStorage.getItem(KEY); if (s) { const d = JSON.parse(s); if (d && d.data_version === SEED.meta.data_version) return d; } } catch (e) {} return freshDB(); }
@@ -357,6 +372,36 @@ window.API = (() => {
     toggleRule(rule_id, actor) { const r = find(db.alert_rules, 'rule_id', rule_id); r.enabled = !r.enabled; audit(actor, 'alert_rule.' + (r.enabled ? 'enabled' : 'disabled'), 'alert_rule', rule_id, {}); save(); return delay({ ok: true }); },
     bumpKPIVersion(kpi_code, formula, actor) { const k = find(db.kpi_definitions, 'kpi_code', kpi_code); k.version++; k.formula = formula || k.formula; audit(actor, 'kpi_definition.version', 'kpi_definition', `${kpi_code}/v${k.version}`, {}); save(); return delay({ ok: true }); },
 
+    /* ======== Single Command / รายงานหน้างาน / รายงาน / ตั้งค่า ======== */
+    getCommands: (scenario) => delay(db.commands.filter(c => !scenario || c.scenario === scenario)),
+    issueCommand(scenario, agency_id, text, actor) {
+      if (!agency_id || !text) return fail('ต้องเลือกหน่วยงานและพิมพ์คำสั่ง');
+      const c = { cmd_id: `CMD-${String(db.commands.length + 1).padStart(3, '0')}`, scenario, agency_id, text, by: actor, sent_at: iso(), ack_at: null, done_at: null, status: 'sent' };
+      db.commands.unshift(c); outbox('command.sent', c.cmd_id, { agency_id }); audit(actor, 'command.sent', 'command', c.cmd_id, { agency_id, scenario }); save();
+      return delay({ ok: true, command: c });
+    },
+    commandStep(cmd_id, actor) {
+      const c = find(db.commands, 'cmd_id', cmd_id); if (!c) return fail('ไม่พบคำสั่ง');
+      if (c.status === 'sent') { c.status = 'ack'; c.ack_at = iso(); }
+      else if (c.status === 'ack') { c.status = 'done'; c.done_at = iso(); }
+      else return fail('คำสั่งนี้เสร็จสิ้นแล้ว');
+      audit(actor, 'command.' + c.status, 'command', cmd_id, {}); save(); return delay({ ok: true, command: c });
+    },
+    getFieldReports: (scenario) => delay(db.field_reports.filter(r => !scenario || r.scenario === scenario)),
+    submitFieldReport(scenario, rep, actor) {
+      if (!rep.text) return fail('พิมพ์รายละเอียดสั้นๆ ของสถานการณ์');
+      const r = { rep_id: `FR-${String(db.field_reports.length + 1).padStart(3, '0')}`, scenario, by: actor, area_id: rep.area_id || 'A1', kind: rep.kind || 'text', text: rep.text, injured: Number(rep.injured || 0), missing: Number(rep.missing || 0), at: iso() };
+      db.field_reports.unshift(r); audit(actor, 'field_report.submitted', 'field_report', r.rep_id, { kind: r.kind, injured: r.injured, missing: r.missing }); save();
+      return delay({ ok: true, report: r });
+    },
+    getReports: () => delay(db.reports),
+    generateReport(type, name, scenario, actor) {
+      const r = { rep_id: `RPT-${String(db.reports.length + 1).padStart(3, '0')}`, type, name, by: actor, at: iso(), scenario };
+      db.reports.unshift(r); audit(actor, 'report.generated', 'report', r.rep_id, { type, scenario }); save(); return delay({ ok: true, report: r });
+    },
+    getSettings: () => delay(db.settings),
+    saveSetting(key, value, actor) { db.settings[key] = value; audit(actor, 'settings.updated', 'settings', key, { value }); save(); return delay({ ok: true }); },
+    logAction(actor, action, detail) { audit(actor, action, 'action', detail.ref || '-', detail); save(); return delay({ ok: true }); },
     /* ======== ชุดทดสอบอัตโนมัติ (ข้อ 12) — รันกับสำเนา DB แล้วคืนค่าเดิม ======== */
     async runTests() {
       const backup = structuredClone(db); const results = [];

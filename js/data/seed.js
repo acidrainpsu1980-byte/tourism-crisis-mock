@@ -477,5 +477,5 @@ window.SEED = (() => {
            sos_requests, rescue_tasks, alerts, data_sources, import_batches, quality_issues, social_signals, risk_assessments, risk_zones, monthly_incidents,
            mobility_cells, heatmap_cells, flow_counts, kpi_definitions, alert_rules, audit_log, scenarios,
            protocol_stages: [['reported', 'ตรวจพบ', 'ระบบ / ผู้แจ้ง'], ['verified', 'ตรวจสอบ', 'เจ้าหน้าที่ศูนย์สั่งการ'], ['escalated', 'ยกระดับ', 'หัวหน้าศูนย์'], ['notified', 'แจ้งผู้รับผิดชอบ', 'ผู้บัญชาการเหตุการณ์'], ['tracking', 'ติดตาม', 'เจ้าหน้าที่ศูนย์สั่งการ'], ['closed', 'ปิดเหตุ', 'หัวหน้าศูนย์']],
-           meta: { data_version: '2026-10-13.3', now: NOW, snapshot_label: 'ข้อมูลจำลอง ณ 14:00 น. · 13 ต.ค. 2569', priority_rule_version: 'PR-2569.1', offer_timeout_min: 10, today: DAY } };
+           meta: { data_version: '2026-10-13.4', now: NOW, snapshot_label: 'ข้อมูลจำลอง ณ 14:00 น. · 13 ต.ค. 2569', priority_rule_version: 'PR-2569.1', offer_timeout_min: 10, today: DAY } };
 })();
